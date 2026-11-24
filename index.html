@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Monitoraggio Dolore & Elettrostimolazione</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --prog-a: #2563eb;
+      --prog-a-light: #eff6ff;
+      --prog-b: #0d9488;
+      --prog-b-light: #f0fdfa;
+      --radius: 16px;
+      --shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding-bottom: 40px;
+    }
+
+    .app-container {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    header h1 {
+      font-size: 1.3rem;
+      margin: 0 0 4px;
+      font-weight: 700;
+    }
+
+    header p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    /* Program Switcher */
+    .program-switcher {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      background: var(--card);
+      padding: 6px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+
+    .prog-btn {
+      border: 2px solid transparent;
+      border-radius: 12px;
+      padding: 12px 10px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: transparent;
+      color: var(--muted);
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .prog-btn span.sub {
+      font-size: 0.72rem;
+      font-weight: 500;
+      opacity: 0.85;
+    }
+
+    .prog-btn.active-a {
+      background: var(--prog-a-light);
+      color: var(--prog-a);
+      border-color: var(--prog-a);
+    }
+
+    .prog-btn.active-b {
+      background: var(--prog-b-light);
+      color: var(--prog-b);
+      border-color: var(--prog-b);
+    }
+
+    /* Card generic */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin: 0 0 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Calendar */
+    .cal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .cal-nav {
+      background: var(--bg);
+      border: none;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .cal-month-label {
+      font-weight: 700;
+      font-size: 0.98rem;
+      text-transform: capitalize;
+    }
+
+    .cal-weekdays, .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      text-align: center;
+    }
+
+    .cal-weekdays div {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      padding-bottom: 4px;
+    }
+
+    .cal-day {
+      aspect-ratio: 1 / 1;
+      border-radius: 10px;
+      border: 1.5px solid transparent;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      padding: 2px;
+    }
+
+    .cal-day.empty {
+      background: transparent;
+      cursor: default;
+    }
+
+    .cal-day.today {
+      border-color: #94a3b8;
+    }
+
+    .cal-day.selected.sel-a {
+      background: var(--prog-a);
+      color: #fff;
+    }
+
+    .cal-day.selected.sel-b {
+      background: var(--prog-b);
+      color: #fff;
+    }
+
+    .cal-dots {
+      display: flex;
+      gap: 3px;
+      margin-top: 3px;
+      height: 5px;
+    }
+
+    .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+
+    .dot-a { background: var(--prog-a); }
+    .dot-b { background: var(--prog-b); }
+    .cal-day.selected .dot { background: #ffffff; }
+
+    .selected-date-banner {
+      margin-top: 12px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .banner-a { background: var(--prog-a-light); color: var(--prog-a); }
+    .banner-b { background: var(--prog-b-light); color: var(--prog-b); }
+
+    /* Frequency Card */
+    .freq-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .freq-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .freq-label {
+      font-size: 0.96rem;
+      color: var(--text);
+      font-weight: 400;
+    }
+
+    .freq-label strong {
+      font-weight: 800;
+    }
+
+    .freq-sub {
+      font-size: 0.74rem;
+      color: var(--muted);
+    }
+
+    .freq-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .freq-input {
+      width: 74px;
+      height: 42px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      text-align: center;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      background: #f8fafc;
+      outline: none;
+    }
+
+    .freq-input:focus {
+      border-color: var(--prog-a);
+      background: #ffffff;
+    }
+
+    .btn-freq-save {
+      height: 42px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .btn-freq-save.a { background: var(--prog-a); }
+    .btn-freq-save.b { background: var(--prog-b); }
+
+    .btn-freq-clear {
+      height: 42px;
+      width: 34px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Sliders Section */
+    .slot-box {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: #fcfcfd;
+    }
+
+    .slot-box:last-child {
+      margin-bottom: 0;
+    }
+
+    .slot-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .slot-name {
+      font-weight: 700;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .slot-status {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 99px;
+      background: #e2e8f0;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    .slot-status.saved {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .value-badge {
+      font-size: 1.25rem;
+      font-weight: 800;
+      min-width: 36px;
+      text-align: center;
+      padding: 2px 8px;
+      border-radius: 8px;
+      color: #fff;
+      background: #22c55e;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 10px;
+      border-radius: 99px;
+      background: linear-gradient(to right, #22c55e 0%, #eab308 50%, #ef4444 100%);
+      outline: none;
+      margin: 10px 0;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid #1e293b;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      cursor: pointer;
+    }
+
+    .scale-ticks {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: var(--muted);
+      padding: 0 4px;
+      margin-bottom: 10px;
+    }
+
+    .slot-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-save {
+      flex: 1;
+      border: none;
+      border-radius: 10px;
+      padding: 10px;
+      font-weight: 700;
+      font-size: 0.88rem;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .btn-save.a { background: var(--prog-a); }
+    .btn-save.b { background: var(--prog-b); }
+
+    .btn-clear {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--muted);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Charts */
+    .chart-controls {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .range-btn {
+      flex: 1;
+      padding: 6px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .range-btn.active {
+      background: var(--text);
+      color: #fff;
+      border-color: var(--text);
+    }
+
+    .chart-wrapper {
+      position: relative;
+      height: 230px;
+      width: 100%;
+    }
+
+    .chart-wrapper.tall {
+      height: 320px;
+    }
+
+    .chart-desc {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin: 0 0 10px;
+    }
+
+    /* Full-width PDF Export Button */
+    .export-full-btn {
+      width: 100%;
+      background: #1e293b;
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 15px 16px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .export-full-btn:active {
+      transform: scale(0.99);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: #1e293b;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 99px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+      transition: transform 0.25s ease;
+      z-index: 999;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+  <header>
+    <h1>Diario Elettrostimolazione</h1>
+    <p>Monitoraggio dolore articolare (scala 1–10)</p>
+  </header>
+
+  <!-- Selettore Programma A / B -->
+  <div class="program-switcher">
+    <button id="btnProgA" class="prog-btn active-a" onclick="selectProgram('A')">
+      <span>Programma A</span>
+      <span class="sub" id="countProgA">0 rilevazioni</span>
+    </button>
+    <button id="btnProgB" class="prog-btn" onclick="selectProgram('B')">
+      <span>Programma B</span>
+      <span class="sub" id="countProgB">0 rilevazioni</span>
+    </button>
+  </div>
+
+  <!-- Calendario -->
+  <div class="card">
+    <div class="cal-header">
+      <button class="cal-nav" onclick="changeMonth(-1)">‹</button>
+      <div class="cal-month-label" id="calMonthLabel"></div>
+      <button class="cal-nav" onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="cal-weekdays">
+      <div>Lun</div><div>Mar</div><div>Mer</div><div>Gio</div><div>Ven</div><div>Sab</div><div>Dom</div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div id="selectedDateBanner" class="selected-date-banner banner-a">
+      <span id="selectedDateText">Oggi</span>
+      <span id="selectedProgTag">Programma A</span>
+    </div>
+  </div>
+
+  <!-- Riquadro Frequenza durante la Giornata -->
+  <div class="card">
+    <div class="freq-container">
+      <div class="freq-info">
+        <div class="freq-label"><strong>Frequenza</strong> durante la <strong>Giornata</strong></div>
+        <div class="freq-sub" id="freqStatus">Valore da 0.0 a 10.0 · Non inserito</div>
+      </div>
+      <div class="freq-controls">
+        <input
+          type="number"
+          id="freqInput"
+          class="freq-input"
+          min="0.0"
+          max="10.0"
+          step="0.1"
+          inputmode="decimal"
+          placeholder="0.0"
+        />
+        <button id="btnSaveFreq" class="btn-freq-save a" onclick="saveFrequency()">Salva</button>
+        <button class="btn-freq-clear" onclick="clearFrequency()" title="Cancella">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inserimento 3 fasce giornaliere -->
+  <div class="card">
+    <div class="card-title">
+      <span>Inserisci livello dolore</span>
+      <span style="font-size: 0.78rem; color: var(--muted); font-weight: 500;">1 = minimo · 10 = massimo</span>
+    </div>
+
+    <!-- Mattina -->
+    <div class="slot-box">
+      <div class="slot-top">
+        <div class="slot-name">☀️ Mattina <span id="status-mattina" class="slot-status">Non inserito</span></div>
+        <div id="badge-mattina" class="value-badge">5</div>
+      </div>
+      <input type="range" id="slider-mattina" min="1" max="10" value="5" oninput="updateSliderUI('mattina', this.value)" />
+      <div class="scale-ticks">
+        <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+      </div>
+      <div class="slot-actions">
+        <button id="save-mattina" class="btn-save a" onclick="saveSlot('mattina')">Salva Mattina</button>
+        <button class="btn-clear" onclick="clearSlot('mattina')">Cancella</button>
+      </div>
+    </div>
+
+    <!-- Pomeriggio -->
+    <div class="slot-box">
+      <div class="slot-top">
+        <div class="slot-name">🌤️ Pomeriggio <span id="status-pomeriggio" class="slot-status">Non inserito</span></div>
+        <div id="badge-pomeriggio" class="value-badge">5</div>
+      </div>
+      <input type="range" id="slider-pomeriggio" min="1" max="10" value="5" oninput="updateSliderUI('pomeriggio', this.value)" />
+      <div class="scale-ticks">
+        <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+      </div>
+      <div class="slot-actions">
+        <button id="save-pomeriggio" class="btn-save a" onclick="saveSlot('pomeriggio')">Salva Pomeriggio</button>
+        <button class="btn-clear" onclick="clearSlot('pomeriggio')">Cancella</button>
+      </div>
+    </div>
+
+    <!-- Sera -->
+    <div class="slot-box">
+      <div class="slot-top">
+        <div class="slot-name">🌙 Sera <span id="status-sera" class="slot-status">Non inserito</span></div>
+        <div id="badge-sera" class="value-badge">5</div>
+      </div>
+      <input type="range" id="slider-sera" min="1" max="10" value="5" oninput="updateSliderUI('sera', this.value)" />
+      <div class="scale-ticks">
+        <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+      </div>
+      <div class="slot-actions">
+        <button id="save-sera" class="btn-save a" onclick="saveSlot('sera')">Salva Sera</button>
+        <button class="btn-clear" onclick="clearSlot('sera')">Cancella</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grafico 1: Andamento nel tempo -->
+  <div class="card">
+    <div class="card-title">1. Andamento Giornaliero (A vs B)</div>
+    <p class="chart-desc">Media giornaliera del dolore nei giorni selezionati per Programma A e B.</p>
+    <div class="chart-controls">
+      <button class="range-btn active" id="range-14" onclick="setChartRange(14)">Ultimi 14 giorni</button>
+      <button class="range-btn" id="range-30" onclick="setChartRange(30)">Ultimi 30 giorni</button>
+      <button class="range-btn" id="range-month" onclick="setChartRange('month')">Mese calendario</button>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Grafico 2: Fasce della giornata -->
+  <div class="card">
+    <div class="card-title">2. Dolore Medio per Fase della Giornata</div>
+    <p class="chart-desc">Confronto tra Mattina, Pomeriggio e Sera in base al programma attivo.</p>
+    <div class="chart-wrapper">
+      <canvas id="phaseChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Grafico 3: Confronto complessivo Programma A vs B -->
+  <div class="card">
+    <div class="card-title">3. Confronto Efficacia Programma A vs B</div>
+    <p class="chart-desc">Media globale, picco massimo e dolore minimo registrati per ciascun programma.</p>
+    <div class="chart-wrapper">
+      <canvas id="programCompareChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Grafico 4: Frequenza durante la giornata -->
+  <div class="card">
+    <div class="card-title">4. Andamento Frequenza Giornaliera (0.0 – 10.0)</div>
+    <p class="chart-desc">Valore decimale della frequenza impostata giorno per giorno per Programma A e B.</p>
+    <div class="chart-wrapper tall">
+      <canvas id="frequencyChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Pulsante unico a tutta larghezza per esportazione PDF -->
+  <button class="export-full-btn" onclick="exportPDF()">
+    📄 Esporta Report PDF (Max 2 Pagine A4)
+  </button>
+</div>
+
+<div id="toast" class="toast">Salvato!</div>
+
+<script>
+  const STORAGE_KEY = 'pain_tracker_tens_v1';
+  const PAIN_SLOTS = ['mattina', 'pomeriggio', 'sera'];
+
+  let currentProgram = 'A';
+  let selectedDateStr = formatDateISO(new Date());
+  let viewYear = new Date().getFullYear();
+  let viewMonth = new Date().getMonth();
+  let chartRange = 14;
+
+  let trendChartInstance = null;
+  let phaseChartInstance = null;
+  let compareChartInstance = null;
+  let frequencyChartInstance = null;
+
+  function loadData() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveData(data) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  function formatDateISO(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function formatItalianDate(isoStr) {
+    const [y, m, d] = isoStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    const todayStr = formatDateISO(new Date());
+    const formatted = date.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'long' });
+    return isoStr === todayStr ? `Oggi (${formatted})` : formatted;
+  }
+
+  function getPainColor(val) {
+    val = Number(val);
+    if (val <= 3) return '#22c55e';
+    if (val <= 5) return '#eab308';
+    if (val <= 7) return '#f97316';
+    return '#ef4444';
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  function selectProgram(prog) {
+    currentProgram = prog;
+    const btnA = document.getElementById('btnProgA');
+    const btnB = document.getElementById('btnProgB');
+    const banner = document.getElementById('selectedDateBanner');
+    const tag = document.getElementById('selectedProgTag');
+    const freqSaveBtn = document.getElementById('btnSaveFreq');
+
+    if (prog === 'A') {
+      btnA.className = 'prog-btn active-a';
+      btnB.className = 'prog-btn';
+      banner.className = 'selected-date-banner banner-a';
+      tag.textContent = 'Programma A';
+      freqSaveBtn.className = 'btn-freq-save a';
+    } else {
+      btnA.className = 'prog-btn';
+      btnB.className = 'prog-btn active-b';
+      banner.className = 'selected-date-banner banner-b';
+      tag.textContent = 'Programma B';
+      freqSaveBtn.className = 'btn-freq-save b';
+    }
+
+    PAIN_SLOTS.forEach(slot => {
+      const saveBtn = document.getElementById(`save-${slot}`);
+      saveBtn.className = `btn-save ${prog.toLowerCase()}`;
+    });
+
+    renderCalendar();
+    loadInputsForSelectedDate();
+  }
+
+  function changeMonth(delta) {
+    viewMonth += delta;
+    if (viewMonth < 0) {
+      viewMonth = 11;
+      viewYear--;
+    } else if (viewMonth > 11) {
+      viewMonth = 0;
+      viewYear++;
+    }
+    renderCalendar();
+    if (chartRange === 'month') renderAllCharts();
+  }
+
+  function renderCalendar() {
+    const data = loadData();
+    const grid = document.getElementById('calGrid');
+    const label = document.getElementById('calMonthLabel');
+    grid.innerHTML = '';
+
+    const monthDate = new Date(viewYear, viewMonth, 1);
+    label.textContent = monthDate.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+
+    let firstDayIndex = monthDate.getDay() - 1;
+    if (firstDayIndex < 0) firstDayIndex = 6;
+
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const todayStr = formatDateISO(new Date());
+
+    for (let i = 0; i < firstDayIndex; i++) {
+      const empty = document.createElement('div');
+      empty.className = 'cal-day empty';
+      grid.appendChild(empty);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateObj = new Date(viewYear, viewMonth, day);
+      const iso = formatDateISO(dateObj);
+      const cell = document.createElement('div');
+      cell.className = 'cal-day';
+
+      if (iso === todayStr) cell.classList.add('today');
+      if (iso === selectedDateStr) {
+        cell.classList.add('selected', currentProgram === 'A' ? 'sel-a' : 'sel-b');
+      }
+
+      const numSpan = document.createElement('span');
+      numSpan.textContent = day;
+      cell.appendChild(numSpan);
+
+      const dots = document.createElement('div');
+      dots.className = 'cal-dots';
+      const dayRecord = data[iso];
+      if (dayRecord?.A && Object.keys(dayRecord.A).length > 0) {
+        const dA = document.createElement('span');
+        dA.className = 'dot dot-a';
+        dots.appendChild(dA);
+      }
+      if (dayRecord?.B && Object.keys(dayRecord.B).length > 0) {
+        const dB = document.createElement('span');
+        dB.className = 'dot dot-b';
+        dots.appendChild(dB);
+      }
+      cell.appendChild(dots);
+
+      cell.onclick = () => {
+        selectedDateStr = iso;
+        renderCalendar();
+        loadInputsForSelectedDate();
+      };
+
+      grid.appendChild(cell);
+    }
+
+    document.getElementById('selectedDateText').textContent = formatItalianDate(selectedDateStr);
+    updateProgramCounts(data);
+  }
+
+  function updateProgramCounts(data) {
+    let countA = 0;
+    let countB = 0;
+    Object.values(data).forEach(day => {
+      if (day.A) {
+        countA += PAIN_SLOTS.filter(s => day.A[s] !== undefined).length;
+      }
+      if (day.B) {
+        countB += PAIN_SLOTS.filter(s => day.B[s] !== undefined).length;
+      }
+    });
+    document.getElementById('countProgA').textContent = `${countA} rilevazioni`;
+    document.getElementById('countProgB').textContent = `${countB} rilevazioni`;
+  }
+
+  function updateSliderUI(slot, val) {
+    const badge = document.getElementById(`badge-${slot}`);
+    badge.textContent = val;
+    badge.style.background = getPainColor(val);
+  }
+
+  function loadInputsForSelectedDate() {
+    const data = loadData();
+    const record = data[selectedDateStr]?.[currentProgram] || {};
+
+    const freqInput = document.getElementById('freqInput');
+    const freqStatus = document.getElementById('freqStatus');
+    if (record.frequenza !== undefined) {
+      freqInput.value = Number(record.frequenza).toFixed(1);
+      freqStatus.textContent = `Salvato: ${Number(record.frequenza).toFixed(1)} (scala 0.0–10.0)`;
+      freqStatus.style.color = '#166534';
+      freqStatus.style.fontWeight = '600';
+    } else {
+      freqInput.value = '';
+      freqStatus.textContent = 'Valore da 0.0 a 10.0 · Non inserito';
+      freqStatus.style.color = 'var(--muted)';
+      freqStatus.style.fontWeight = '400';
+    }
+
+    PAIN_SLOTS.forEach(slot => {
+      const slider = document.getElementById(`slider-${slot}`);
+      const status = document.getElementById(`status-${slot}`);
+      if (record[slot] !== undefined) {
+        slider.value = record[slot];
+        updateSliderUI(slot, record[slot]);
+        status.textContent = `Registrato: ${record[slot]}/10`;
+        status.className = 'slot-status saved';
+      } else {
+        slider.value = 5;
+        updateSliderUI(slot, 5);
+        status.textContent = 'Non inserito';
+        status.className = 'slot-status';
+      }
+    });
+  }
+
+  function saveFrequency() {
+    const raw = document.getElementById('freqInput').value.replace(',', '.');
+    const val = parseFloat(raw);
+    if (isNaN(val) || val < 0 || val > 10) {
+      showToast('Inserisci un valore valido tra 0.0 e 10.0');
+      return;
+    }
+    const rounded = Math.round(val * 10) / 10;
+    const data = loadData();
+    if (!data[selectedDateStr]) data[selectedDateStr] = {};
+    if (!data[selectedDateStr][currentProgram]) data[selectedDateStr][currentProgram] = {};
+
+    data[selectedDateStr][currentProgram].frequenza = rounded;
+    saveData(data);
+
+    loadInputsForSelectedDate();
+    renderCalendar();
+    renderAllCharts();
+    showToast(`Frequenza salvata (${currentProgram}): ${rounded.toFixed(1)}`);
+  }
+
+  function clearFrequency() {
+    const data = loadData();
+    if (data[selectedDateStr]?.[currentProgram]?.frequenza !== undefined) {
+      delete data[selectedDateStr][currentProgram].frequenza;
+      if (Object.keys(data[selectedDateStr][currentProgram]).length === 0) {
+        delete data[selectedDateStr][currentProgram];
+      }
+      if (Object.keys(data[selectedDateStr]).length === 0) {
+        delete data[selectedDateStr];
+      }
+      saveData(data);
+      loadInputsForSelectedDate();
+      renderCalendar();
+      renderAllCharts();
+      showToast('Frequenza rimossa');
+    } else {
+      document.getElementById('freqInput').value = '';
+    }
+  }
+
+  function saveSlot(slot) {
+    const val = Number(document.getElementById(`slider-${slot}`).value);
+    const data = loadData();
+    if (!data[selectedDateStr]) data[selectedDateStr] = {};
+    if (!data[selectedDateStr][currentProgram]) data[selectedDateStr][currentProgram] = {};
+
+    data[selectedDateStr][currentProgram][slot] = val;
+    saveData(data);
+
+    loadInputsForSelectedDate();
+    renderCalendar();
+    renderAllCharts();
+    showToast(`Salvato ${slot} (Prog. ${currentProgram}): ${val}/10`);
+  }
+
+  function clearSlot(slot) {
+    const data = loadData();
+    if (data[selectedDateStr]?.[currentProgram]?.[slot] !== undefined) {
+      delete data[selectedDateStr][currentProgram][slot];
+      if (Object.keys(data[selectedDateStr][currentProgram]).length === 0) {
+        delete data[selectedDateStr][currentProgram];
+      }
+      if (Object.keys(data[selectedDateStr]).length === 0) {
+        delete data[selectedDateStr];
+      }
+      saveData(data);
+      loadInputsForSelectedDate();
+      renderCalendar();
+      renderAllCharts();
+      showToast(`Valore ${slot} rimosso`);
+    }
+  }
+
+  function setChartRange(range) {
+    chartRange = range;
+    document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`range-${range}`).classList.add('active');
+    renderAllCharts();
+  }
+
+  function getDateListForTrend() {
+    const dates = [];
+    if (chartRange === 'month') {
+      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        dates.push(formatDateISO(new Date(viewYear, viewMonth, d)));
+      }
+    } else {
+      const days = Number(chartRange);
+      const today = new Date();
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        dates.push(formatDateISO(d));
+      }
+    }
+    return dates;
+  }
+
+  function getPainValuesFromRecord(rec) {
+    if (!rec) return [];
+    return PAIN_SLOTS.map(s => rec[s]).filter(v => v !== undefined);
+  }
+
+  function avg(arr) {
+    if (!arr.length) return null;
+    return Number((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2));
+  }
+
+  function renderAllCharts() {
+    const data = loadData();
+    renderTrendChart(data);
+    renderPhaseChart(data);
+    renderCompareChart(data);
+    renderFrequencyChart(data);
+  }
+
+  // GRAFICO 1: Andamento giornaliero dolore
+  function renderTrendChart(data) {
+    const dates = getDateListForTrend();
+    const labels = dates.map(iso => {
+      const [, m, d] = iso.split('-');
+      return `${d}/${m}`;
+    });
+
+    const seriesA = dates.map(iso => avg(getPainValuesFromRecord(data[iso]?.A)));
+    const seriesB = dates.map(iso => avg(getPainValuesFromRecord(data[iso]?.B)));
+
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    if (trendChartInstance) trendChartInstance.destroy();
+
+    trendChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Programma A',
+            data: seriesA,
+            borderColor: '#2563eb',
+            backgroundColor: 'rgba(37, 99, 235, 0.12)',
+            borderWidth: 2.5,
+            tension: 0.3,
+            spanGaps: true,
+            pointRadius: 4
+          },
+          {
+            label: 'Programma B',
+            data: seriesB,
+            borderColor: '#0d9488',
+            backgroundColor: 'rgba(13, 148, 136, 0.12)',
+            borderWidth: 2.5,
+            tension: 0.3,
+            spanGaps: true,
+            pointRadius: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { min: 0, max: 10, ticks: { stepSize: 2 } }
+        },
+        plugins: {
+          legend: { position: 'top' }
+        }
+      }
+    });
+  }
+
+  // GRAFICO 2: Medie per fase della giornata
+  function renderPhaseChart(data) {
+    const buckets = {
+      A: { mattina: [], pomeriggio: [], sera: [] },
+      B: { mattina: [], pomeriggio: [], sera: [] }
+    };
+
+    Object.values(data).forEach(day => {
+      ['A', 'B'].forEach(prog => {
+        if (day[prog]) {
+          PAIN_SLOTS.forEach(slot => {
+            if (day[prog][slot] !== undefined) {
+              buckets[prog][slot].push(day[prog][slot]);
+            }
+          });
+        }
+      });
+    });
+
+    const ctx = document.getElementById('phaseChart').getContext('2d');
+    if (phaseChartInstance) phaseChartInstance.destroy();
+
+    phaseChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Mattina', 'Pomeriggio', 'Sera'],
+        datasets: [
+          {
+            label: 'Programma A',
+            data: [
+              avg(buckets.A.mattina) || 0,
+              avg(buckets.A.pomeriggio) || 0,
+              avg(buckets.A.sera) || 0
+            ],
+            backgroundColor: '#2563eb',
+            borderRadius: 6
+          },
+          {
+            label: 'Programma B',
+            data: [
+              avg(buckets.B.mattina) || 0,
+              avg(buckets.B.pomeriggio) || 0,
+              avg(buckets.B.sera) || 0
+            ],
+            backgroundColor: '#0d9488',
+            borderRadius: 6
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { min: 0, max: 10, ticks: { stepSize: 2 } }
+        }
+      }
+    });
+  }
+
+  // GRAFICO 3: Confronto complessivo Programma A vs B
+  function renderCompareChart(data) {
+    const allA = [];
+    const allB = [];
+
+    Object.values(data).forEach(day => {
+      allA.push(...getPainValuesFromRecord(day.A));
+      allB.push(...getPainValuesFromRecord(day.B));
+    });
+
+    const statsA = allA.length
+      ? [avg(allA), Math.min(...allA), Math.max(...allA)]
+      : [0, 0, 0];
+    const statsB = allB.length
+      ? [avg(allB), Math.min(...allB), Math.max(...allB)]
+      : [0, 0, 0];
+
+    const ctx = document.getElementById('programCompareChart').getContext('2d');
+    if (compareChartInstance) compareChartInstance.destroy();
+
+    compareChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Media Generale', 'Dolore Minimo', 'Picco Massimo'],
+        datasets: [
+          {
+            label: `Programma A (${allA.length} dati)`,
+            data: statsA,
+            backgroundColor: 'rgba(37, 99, 235, 0.85)',
+            borderRadius: 6
+          },
+          {
+            label: `Programma B (${allB.length} dati)`,
+            data: statsB,
+            backgroundColor: 'rgba(13, 148, 136, 0.85)',
+            borderRadius: 6
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { min: 0, max: 10, ticks: { stepSize: 2 } }
+        }
+      }
+    });
+  }
+
+  // GRAFICO 4: Frequenza durante la giornata (asse Y decimale 0.0 - 10.0 e maggiore altezza)
+  function renderFrequencyChart(data) {
+    const dates = getDateListForTrend();
+    const labels = dates.map(iso => {
+      const [, m, d] = iso.split('-');
+      return `${d}/${m}`;
+    });
+
+    const freqA = dates.map(iso => data[iso]?.A?.frequenza ?? null);
+    const freqB = dates.map(iso => data[iso]?.B?.frequenza ?? null);
+
+    const ctx = document.getElementById('frequencyChart').getContext('2d');
+    if (frequencyChartInstance) frequencyChartInstance.destroy();
+
+    frequencyChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Frequenza Prog. A',
+            data: freqA,
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99, 102, 241, 0.14)',
+            borderWidth: 2.5,
+            tension: 0.25,
+            spanGaps: true,
+            pointRadius: 5,
+            pointHoverRadius: 7
+          },
+          {
+            label: 'Frequenza Prog. B',
+            data: freqB,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.14)',
+            borderWidth: 2.5,
+            tension: 0.25,
+            spanGaps: true,
+            pointRadius: 5,
+            pointHoverRadius: 7
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            min: 0.0,
+            max: 10.0,
+            ticks: {
+              stepSize: 0.5,
+              autoSkip: false,
+              callback: function(value) {
+                return Number.isInteger(value) ? value.toFixed(1) : '';
+              }
+            },
+            grid: {
+              color: function(context) {
+                return Number.isInteger(context.tick.value)
+                  ? 'rgba(148, 163, 184, 0.35)'
+                  : 'rgba(148, 163, 184, 0.14)';
+              }
+            }
+          }
+        },
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const val = context.parsed.y;
+                return `${context.dataset.label}: ${val !== null ? val.toFixed(1) : '-'}`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // Esportazione PDF compatta (massimo 2 pagine A4)
+  function exportPDF() {
+    if (!window.jspdf) {
+      alert('Libreria PDF non ancora caricata. Controlla la connessione internet.');
+      return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const data = loadData();
+    const todayFormatted = new Date().toLocaleDateString('it-IT', {
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    });
+
+    // PAGINA 1: Intestazione + Griglia 2x2 con tutti e 4 i grafici
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.setTextColor(30, 41, 59);
+    doc.text('Report Monitoraggio Elettrostimolazione', 14, 16);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Data esportazione: ${todayFormatted} · Giorni registrati: ${Object.keys(data).length}`, 14, 22);
+
+    function getChartDataURL(canvasId) {
+      const sourceCanvas = document.getElementById(canvasId);
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = sourceCanvas.width;
+      tempCanvas.height = sourceCanvas.height;
+      const tCtx = tempCanvas.getContext('2d');
+      tCtx.fillStyle = '#ffffff';
+      tCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+      tCtx.drawImage(sourceCanvas, 0, 0);
+      return tempCanvas.toDataURL('image/png', 1.0);
+    }
+
+    const gridCharts = [
+      { id: 'trendChart', title: '1. Andamento Dolore (A vs B)', x: 14, y: 32, w: 88, h: 72 },
+      { id: 'phaseChart', title: '2. Media Dolore per Fascia', x: 108, y: 32, w: 88, h: 72 },
+      { id: 'programCompareChart', title: '3. Efficacia Programma A vs B', x: 14, y: 120, w: 88, h: 72 },
+      { id: 'frequencyChart', title: '4. Frequenza Giornaliera (0.0 - 10.0)', x: 108, y: 120, w: 88, h: 88 }
+    ];
+
+    gridCharts.forEach(c => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(30, 41, 59);
+      doc.text(c.title, c.x, c.y);
+
+      const imgData = getChartDataURL(c.id);
+      doc.addImage(imgData, 'PNG', c.x, c.y + 3, c.w, c.h);
+    });
+
+    // PAGINA 2: Tabella compatta delle registrazioni (massimo 1 pagina aggiuntiva)
+    const sortedDates = Object.keys(data).sort().reverse();
+    if (sortedDates.length > 0) {
+      doc.addPage();
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(30, 41, 59);
+      doc.text('Dettaglio Registrazioni Giornaliere', 14, 16);
+
+      let rowY = 25;
+      doc.setFontSize(8.5);
+      doc.setFillColor(241, 245, 249);
+      doc.rect(14, rowY - 4.5, 182, 6.5, 'F');
+      doc.text('Data', 16, rowY);
+      doc.text('Prog.', 42, rowY);
+      doc.text('Frequenza', 60, rowY);
+      doc.text('Mattina', 88, rowY);
+      doc.text('Pomeriggio', 114, rowY);
+      doc.text('Sera', 146, rowY);
+      doc.text('Media Dolore', 168, rowY);
+      rowY += 6;
+
+      doc.setFont('helvetica', 'normal');
+      const rows = [];
+      sortedDates.forEach(iso => {
+        ['A', 'B'].forEach(prog => {
+          if (data[iso]?.[prog]) rows.push({ iso, prog, rec: data[iso][prog] });
+        });
+      });
+
+      const maxRows = 42;
+      const visibleRows = rows.slice(0, maxRows);
+
+      visibleRows.forEach(({ iso, prog, rec }) => {
+        const [y, m, d] = iso.split('-');
+        const dateIt = `${d}/${m}/${y}`;
+        const freqVal = rec.frequenza !== undefined ? Number(rec.frequenza).toFixed(1) : '-';
+        const matVal = rec.mattina !== undefined ? `${rec.mattina}/10` : '-';
+        const pomVal = rec.pomeriggio !== undefined ? `${rec.pomeriggio}/10` : '-';
+        const serVal = rec.sera !== undefined ? `${rec.sera}/10` : '-';
+        const painVals = getPainValuesFromRecord(rec);
+        const meanVal = painVals.length ? `${avg(painVals)}/10` : '-';
+
+        doc.text(dateIt, 16, rowY);
+        doc.text(`Prog. ${prog}`, 42, rowY);
+        doc.text(freqVal, 60, rowY);
+        doc.text(matVal, 88, rowY);
+        doc.text(pomVal, 114, rowY);
+        doc.text(serVal, 146, rowY);
+        doc.text(meanVal, 168, rowY);
+        rowY += 5.8;
+      });
+
+      if (rows.length > maxRows) {
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Mostrate le ultime ${maxRows} registrazioni su ${rows.length} totali.`, 14, rowY + 3);
+      }
+    }
+
+    doc.save(`report-elettrostimolazione-${formatDateISO(new Date())}.pdf`);
+    showToast('PDF generato (max 2 pagine A4)!');
+  }
+
+  // Inizializzazione
+  renderCalendar();
+  loadInputsForSelectedDate();
+  renderAllCharts();
+</script>
+
+</body>
+</html>
